@@ -556,10 +556,18 @@
                 return info;
             }
 
-            if (str.includes('remake')) {
+            if (str.includes("remake")) {
                 info.isRemake = true;
-                const match = str.match(/saison\s*(\d+)/) || str.match(/s(\d+)/);
-                if (match) info.num = parseInt(match[1]);
+
+                // Capture "remake2024" OU "remake 2024" OU "remake_2024"
+                const yearMatch = str.match(/remake[\s_]*([0-9]{4})/);
+                if (yearMatch) {
+                    info.remakeYear = parseInt(yearMatch[1]);
+                }
+
+                // Remake = par défaut on prend la version la plus récente
+                info.num = 9999;
+
                 return info;
             }
 
@@ -570,126 +578,128 @@
         }
 
         async function smartFetchMetadata(title, dbInfo) { 
-            let cleanTitle = title.toLowerCase()
-                .replace(/remake\d*/g, '')
-                .replace(/saison\s*\d+/g, '')
-                .replace(/season\s*\d+/g, '')
-                .replace(/film/g, '')
-                .replace(/movie/g, '')
-                .replace(/s\d+/g, '')
-                .replace(/[\[\(].*?[\]\)]/g, '')
-                .replace(/\.(mkv|mp4|avi)/g, '')
-                .replace(/_/g, ' ')
+            // --- Nettoyage très doux (conserve mieux les titres FR)
+            let cleanTitle = title
+                .toLowerCase()
+                .replace(/\(.*?\)/g, '')
+                .replace(/\[.*?\]/g, '')
+                .replace(/film|movie|saison\s*\d+|season\s*\d+|s\d+/g, '')
                 .trim();
 
-            const cacheKey = `trends_v23_${cleanTitle}_${dbInfo.isMovie ? 'M' : 'TV'}_${dbInfo.isRemake ? 'R' : ''}_s${dbInfo.num}`; 
+            const cacheKey = `v3_${cleanTitle}_${dbInfo.isMovie ? 'M' : 'TV'}_s${dbInfo.num}`;
             const cached = localStorage.getItem(cacheKey);
-
             if (cached) {
                 const el = document.getElementById('loadingCache');
                 if(el) el.innerText = parseInt(el.innerText || 0) + 1;
                 return JSON.parse(cached);
             }
 
+            // --- Première requête (normale)
+            const meta1 = await fetchAndPickBest(cleanTitle, dbInfo);
+
+            // Si données complètes : terminé
+            if (meta1 && (meta1.year || (meta1.studios && meta1.studios.length))) {
+                localStorage.setItem(cacheKey, JSON.stringify(meta1));
+                return meta1;
+            }
+
+            // --- Seconde tentative : stricte
+            const meta2 = await fetchAndPickBest(meta1?.title_en || cleanTitle, dbInfo, true);
+
+            const finalMeta = meta2 || meta1;
+            localStorage.setItem(cacheKey, JSON.stringify(finalMeta));
+            return finalMeta;
+        }
+
+
+        async function fetchAndPickBest(query, dbInfo, strict = false) {
             try {
-                await sleep(400 + Math.random() * 200);
-                const el = document.getElementById('loadingCalls');
-                if(el) el.innerText = parseInt(el.innerText || 0) + 1;
+                await sleep(300 + Math.random() * 200);
+                document.getElementById('loadingCalls').innerText++;
 
-                const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(cleanTitle)}&limit=25`);
-
-                if (res.status === 429) {
-                    await sleep(3000); 
-                    return smartFetchMetadata(title, dbInfo);
-                }
+                const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(query)}&limit=25`);
+                if (!res.ok) return null;
 
                 const json = await res.json();
+                let candidates = json.data || [];
 
-                if (json.data && json.data.length > 0) {
-                    let candidates = json.data;
+                if (!candidates.length) return null;
 
-                    // Filtre Type
-                    if (dbInfo.isMovie) {
-                        candidates = candidates.filter(x => x.type === 'Movie' || x.type === 'ONA');
-                    } else {
-                        candidates = candidates.filter(x => x.type === 'TV' || x.type === 'ONA');
-                    }
+                // --- Filtre par type (Movie / TV)
+                candidates = candidates.filter(x => {
+                    if (dbInfo.isMovie) return x.type === 'Movie';
+                    return x.type === 'TV' || x.type === 'ONA';
+                });
 
-                    // Filtre Statut (Pas de futur)
-                    candidates = candidates.filter(x => x.status !== 'Not yet aired');
+                if (!candidates.length) return null;
 
-                    // Filtre Pertinence
-                    candidates = candidates.filter(x => {
-                        const titles = [
-                            x.title,
-                            x.title_english,
-                            ...(x.titles || []).map(t => t.title)
-                        ].filter(Boolean).map(t => t.toLowerCase());
+                // --- Nettoyage titres pour comparaison
+                const q = query.toLowerCase().trim();
 
-                        // Match exact "Kaoru Hana wa Rin to Saku"
-                        if (titles.includes(cleanTitle)) return true;
+                // --- Filtre de pertinence
+                candidates = candidates.filter(x => {
+                    const titles = [
+                        x.title, 
+                        x.title_english,
+                        ...(x.titles || []).map(t => t.title)
+                    ].filter(Boolean).map(t => t.toLowerCase());
 
-                        // Match strict : >= 75% similarité
-                        return titles.some(t => similarity(t, cleanTitle) >= 0.75);
-                    });
+                    if (titles.includes(q)) return true;
+                    if (strict) return similarity(titles[0] || "", q) > 0.70;
 
-                    if (candidates.length === 0) return createFallback(title, dbInfo);
+                    // Souple mais pas trop
+                    return titles.some(t => similarity(t, q) > 0.55);
+                });
 
-                    // Tri Année
-                    candidates.sort((a, b) => {
-                        const yearA = a.year || (a.aired?.from ? new Date(a.aired.from).getFullYear() : 0);
-                        const yearB = b.year || (b.aired?.from ? new Date(b.aired.from).getFullYear() : 0);
-                        return yearA - yearB; 
-                    });
+                if (!candidates.length) return null;
 
-                    let bestMatch = null;
+                // --- Classement par année pour choisir le meilleur
+                candidates.sort((a, b) => {
+                    const ya = a.year || (a.aired?.from ? new Date(a.aired.from).getFullYear() : 0);
+                    const yb = b.year || (b.aired?.from ? new Date(b.aired.from).getFullYear() : 0);
+                    return ya - yb;
+                });
 
-                    if (dbInfo.isRemake) {
-                        bestMatch = candidates[candidates.length - 1];
-                    } else if (dbInfo.isMovie) {
-                        bestMatch = candidates[0];
-                    } else {
-                        const idx = dbInfo.num - 1;
-                        if (idx < candidates.length) {
-                            bestMatch = candidates[idx];
-                        } else {
-                            bestMatch = candidates[candidates.length - 1];
-                        }
-                    }
+                let best = candidates[0];
 
-                    if (!bestMatch) return createFallback(title, dbInfo);
-
-                    const imgUrl = bestMatch.images?.webp?.large_image_url || bestMatch.images?.jpg?.large_image_url || DEFAULT_IMG;
-                    
-                    let demos = bestMatch.demographics.map(d => d.name);
-                    if (demos.length === 0 && bestMatch.genres) {
-                        const known = ['Shounen', 'Seinen', 'Shoujo', 'Josei', 'Kids'];
-                        bestMatch.genres.forEach(g => { if(known.includes(g.name)) demos.push(g.name); });
-                    }
-
-                    const meta = {
-                        title: bestMatch.title,
-                        title_en: bestMatch.title_english || bestMatch.title,
-                        image: imgUrl,
-                        score: bestMatch.score,
-                        studios: bestMatch.studios.map(s => s.name),
-                        genres: bestMatch.genres.map(g => g.name),
-                        demographics: demos,
-                        source: bestMatch.source,
-                        year: bestMatch.year || (bestMatch.aired?.from ? new Date(bestMatch.aired.from).getFullYear() : null),
-                        db_season_disp: dbInfo.isMovie ? "Film" : (dbInfo.isRemake ? "Remake" : `Saison ${dbInfo.num}`),
-                        episodes: bestMatch.episodes || (dbInfo.isMovie ? 1 : 12),
-                        url: bestMatch.url,
-                        timestamp: Date.now()
-                    };
-                    
-                    localStorage.setItem(cacheKey, JSON.stringify(meta));
-                    return meta;
+                // Si saison X → prendre le meilleur indice 
+                if (!dbInfo.isMovie && !strict) {
+                    const idx = dbInfo.num - 1;
+                    if (idx < candidates.length) best = candidates[idx];
                 }
-            } catch (e) { console.warn(e); }
+                if (dbInfo.remakeYear) {
+                    candidates.sort((a, b) => {
+                        const ya = a.year || 0;
+                        const yb = b.year || 0;
+                        return Math.abs(ya - dbInfo.remakeYear) - Math.abs(yb - dbInfo.remakeYear);
+                    });
+                    best = candidates[0];
+                }
 
-            return createFallback(title, dbInfo);
+                // --- Construction du meta final
+                return {
+                    title: best.title,
+                    title_en: best.title_english || best.title,
+                    image: best.images?.webp?.large_image_url || best.images?.jpg?.large_image_url || DEFAULT_IMG,
+                    score: best.score || 0,
+                    studios: best.studios?.map(s => s.name) || [],
+                    genres: best.genres?.map(g => g.name) || [],
+                    demographics: best.demographics?.map(d => d.name) || [],
+                    source: best.source || "Unknown",
+                    year: best.year || (best.aired?.from ? new Date(best.aired.from).getFullYear() : null),
+                    db_season_disp: dbInfo.isMovie ? "Film" : dbInfo.isRemake
+                            ? `Remake ${dbInfo.remakeYear || ''}`.trim()
+                            : `Saison ${dbInfo.num}`,
+                    episodes: best.episodes || (dbInfo.isMovie ? 1 : 12),
+                    url: best.url,
+                };
+
+            } catch (e) {
+                console.warn(e);
+                return null;
+            }
         }
+
 
         function createFallback(title, dbInfo) {
             return {
