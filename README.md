@@ -4,7 +4,7 @@ AnimeStats est une solution légère d'analyse et de visualisation de données d
 
 Le projet enrichit les données locales avec des métadonnées externes via l'API Jikan (MyAnimeList).
 
-## 📋 Fonctionnalités
+## Fonctionnalités
 
 *   **Collecte de données** : Endpoint simple pour enregistrer l'anime, la saison et l'épisode visionné.
 *   **Stockage Persistant** : Utilisation de SQLite pour une base de données locale légère et rapide.
@@ -16,12 +16,12 @@ Le projet enrichit les données locales avec des métadonnées externes via l'AP
 *   **Enrichissement de métadonnées** : Récupération automatique des pochettes, notes et informations de production via l'API Jikan.
 *   **Sécurité** : Protection de l'accès aux données par token administrateur.
 
-## 🛠 Prérequis
+## Prérequis
 
 *   Python 3.8 ou supérieur
 *   Pip (Gestionnaire de paquets Python)
 
-## 🚀 Installation
+## Installation
 
 1.  **Cloner le dépôt**
     ```bash
@@ -49,9 +49,10 @@ Le projet enrichit les données locales avec des métadonnées externes via l'AP
     ADMIN_PASSWORD=VotreMotDePasseSecurise
     ```
 
-## ▶️ Démarrage
+## Démarrage
 
 Lancez l'application via le point d'entrée principal :
 
 ```bash
 python main.py
+```
