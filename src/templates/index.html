@@ -1,0 +1,1115 @@
+<!DOCTYPE html>
+<html lang="fr" class="dark">
+
+<head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>AnimeStats: Community Dashboard</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css" rel="stylesheet">
+    <script>
+        tailwind.config = {
+            darkMode: 'class',
+            theme: {
+                extend: {
+                    colors: {
+                        primary: '#8b5cf6',
+                        secondary: '#ec4899',
+                        accent: '#06b6d4',
+                        dark: '#0f172a',
+                        surface: '#1e293b',
+                        gold: '#fbbf24',
+                    },
+                    fontFamily: {
+                        sans: ['Inter', 'sans-serif'],
+                        mono: ['JetBrains Mono', 'monospace'],
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;800&family=JetBrains+Mono:wght@400;700&display=swap');
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #020617 0%, #0f172a 100%);
+            background-attachment: fixed;
+        }
+
+        .glass {
+            background: rgba(30, 41, 59, 0.6);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            box-shadow: 0 4px 30px rgba(0, 0, 0, 0.2);
+        }
+
+        .glass-strong {
+            background: rgba(30, 41, 59, 0.8);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(139, 92, 246, 0.2);
+            box-shadow: 0 8px 40px rgba(139, 92, 246, 0.15);
+        }
+
+        ::-webkit-scrollbar {
+            width: 6px;
+            height: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #020617;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #8b5cf6;
+            border-radius: 4px;
+        }
+
+        .animate-enter {
+            animation: enter 0.6s ease-out forwards;
+            opacity: 0;
+            transform: translateY(20px);
+        }
+
+        @keyframes enter {
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .stat-card:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 40px rgba(139, 92, 246, 0.2);
+        }
+
+        .hero-gradient {
+            background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(236, 72, 153, 0.2) 100%);
+            border: 1px solid rgba(139, 92, 246, 0.3);
+        }
+
+        .pulse-glow {
+            animation: pulseGlow 2s ease-in-out infinite;
+        }
+
+        @keyframes pulseGlow {
+
+            0%,
+            100% {
+                box-shadow: 0 0 20px rgba(139, 92, 246, 0.3);
+            }
+
+            50% {
+                box-shadow: 0 0 40px rgba(139, 92, 246, 0.6);
+            }
+        }
+    </style>
+</head>
+
+<body class="text-gray-200 min-h-screen flex flex-col selection:bg-primary selection:text-white">
+
+    <!-- Enhanced Top Bar -->
+    <nav class="glass-strong sticky top-0 z-50 border-b border-primary/20 mb-8">
+        <div class="max-w-[1800px] mx-auto px-6 py-4">
+            <div class="flex items-center justify-between">
+                <div class="flex items-center gap-4">
+                    <div class="relative">
+                        <div
+                            class="w-12 h-12 rounded-xl bg-gradient-to-br from-primary via-secondary to-accent flex items-center justify-center text-white font-bold shadow-lg pulse-glow">
+                            <i class="fa-solid fa-server text-xl"></i>
+                        </div>
+                        <div
+                            class="absolute -top-1 -right-1 w-3 h-3 bg-green-400 rounded-full border-2 border-dark animate-pulse">
+                        </div>
+                    </div>
+                    <div>
+                        <h1 class="text-2xl font-black tracking-tight text-white">
+                            ANIME<span
+                                class="text-transparent bg-clip-text bg-gradient-to-r from-primary to-secondary">STATS</span>
+                            API
+                        </h1>
+                        <p class="text-[10px] text-gray-400 font-mono uppercase tracking-wider">Community Database
+                            Explorer</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-6">
+                    <div class="hidden md:flex items-center gap-4">
+                        <div class="glass px-4 py-2 rounded-lg">
+                            <p class="text-[10px] text-gray-500 uppercase">System Status</p>
+                            <p class="text-sm font-bold text-accent" id="statusText">INITIALIZING...</p>
+                        </div>
+                        <div class="glass px-4 py-2 rounded-lg">
+                            <p class="text-[10px] text-gray-500 uppercase">Data Points</p>
+                            <p class="text-sm font-bold text-primary" id="dataPoints">0</p>
+                        </div>
+                    </div>
+                    <button onclick="hardReset()"
+                        class="px-4 py-2 bg-red-500/10 border border-red-500/30 text-red-400 hover:bg-red-500/20 transition rounded-lg text-xs font-bold uppercase tracking-wider">
+                        <i class="fa-solid fa-trash-arrow-up mr-2"></i> Purge Cache
+                    </button>
+                </div>
+            </div>
+        </div>
+    </nav>
+
+    <main class="max-w-[1800px] mx-auto px-6 space-y-8 flex-grow">
+
+        <!-- LOADING SCREEN -->
+        <div id="loading" class="flex flex-col items-center justify-center min-h-[60vh]">
+            <div class="relative mb-8">
+                <div
+                    class="w-24 h-24 rounded-2xl bg-gradient-to-br from-primary to-secondary flex items-center justify-center shadow-2xl pulse-glow">
+                    <i class="fa-solid fa-brain-circuit text-4xl text-white animate-pulse"></i>
+                </div>
+                <div class="absolute -top-2 -right-2 w-6 h-6 bg-accent rounded-full animate-ping"></div>
+            </div>
+            <h2 class="text-4xl font-black text-white mb-2 tracking-tight">GREMORY ARCHIVE SYSTEM</h2>
+            <p class="text-gray-400 font-mono text-sm mb-8" id="loadingText">Initializing crimson database...</p>
+
+            <div class="grid grid-cols-3 gap-6 mb-8">
+                <div class="glass-strong p-6 rounded-xl text-center">
+                    <i class="fa-solid fa-database text-3xl text-primary mb-2"></i>
+                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">Titres Analysés</p>
+                    <p class="text-3xl font-black text-white" id="loadingTitles">0</p>
+                </div>
+                <div class="glass-strong p-6 rounded-xl text-center">
+                    <i class="fa-solid fa-satellite-dish text-3xl text-accent mb-2"></i>
+                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">API Calls</p>
+                    <p class="text-3xl font-black text-white" id="loadingCalls">0</p>
+                </div>
+                <div class="glass-strong p-6 rounded-xl text-center">
+                    <i class="fa-solid fa-bolt text-3xl text-green-400 mb-2"></i>
+                    <p class="text-xs text-gray-500 uppercase font-bold mb-1">Cache Hits</p>
+                    <p class="text-3xl font-black text-white" id="loadingCache">0</p>
+                </div>
+            </div>
+
+            <div class="w-[600px] h-3 bg-gray-800 rounded-full overflow-hidden shadow-inner">
+                <div id="progressBar"
+                    class="h-full bg-gradient-to-r from-primary via-accent to-secondary w-0 transition-all duration-300 shadow-lg">
+                </div>
+            </div>
+            <p class="text-sm text-gray-500 mt-3 font-mono"><span id="loadingPercent">0</span>% • <span
+                    id="loadingETA">Calculating ETA...</span></p>
+        </div>
+
+        <!-- MAIN DASHBOARD -->
+        <div id="dashboard" class="hidden animate-enter space-y-8">
+
+            <!-- HERO STATS -->
+            <div class="hero-gradient rounded-2xl p-8 mb-8">
+                <div class="grid grid-cols-2 md:grid-cols-4 lg:grid-cols-7 gap-4">
+                    <div class="text-center">
+                        <i class="fa-solid fa-folder-open text-3xl text-primary mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Total Fichiers</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="totalFiles">0</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-film text-3xl text-accent mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Titres Uniques</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="uniqueTitles">0</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-stopwatch text-3xl text-secondary mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Temps Perdu</p>
+                        <h3 class="text-lg font-black text-white mt-3 leading-none" id="timeWasted">0j 0h</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-star text-3xl text-yellow-400 mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Note Moy.</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="avgScore">0.0</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-masks-theater text-3xl text-green-400 mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Genres</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="totalGenres">0</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-calendar-check text-3xl text-blue-400 mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Jours Actifs</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="activeDays">0</h3>
+                    </div>
+                    <div class="text-center">
+                        <i class="fa-solid fa-hourglass-half text-3xl text-purple-400 mb-2"></i>
+                        <p class="text-xs text-gray-400 uppercase font-bold">Âge Collection</p>
+                        <h3 class="text-3xl font-black text-white mt-1" id="ageSpan">0</h3>
+                    </div>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                <!-- Oldest Anime -->
+                <div class="glass-strong rounded-2xl p-6 border-l-4 border-blue-500">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-scroll text-blue-400"></i> L'Ancêtre de la Collection
+                    </h3>
+                    <div class="flex items-center gap-4">
+                        <div class="w-20 h-20 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
+                            <img id="oldestImage" src="" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-xl font-bold text-white mb-1" id="oldestTitle">--</h4>
+                            <p class="text-sm text-blue-400 mb-1" id="oldestYear">Année: --</p>
+                            <p class="text-xs text-gray-500" id="oldestStudio">Studio: --</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Newest Anime -->
+                <div class="glass-strong rounded-2xl p-6 border-l-4 border-green-500">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-sparkles text-green-400"></i> La Nouvelle Recrue (Sortie)
+                    </h3>
+                    <div class="flex items-center gap-4">
+                        <div class="w-20 h-20 rounded-lg overflow-hidden bg-gray-800 flex-shrink-0">
+                            <img id="newestImage" src="" class="w-full h-full object-cover">
+                        </div>
+                        <div class="flex-1">
+                            <h4 class="text-xl font-bold text-white mb-1" id="newestTitle">--</h4>
+                            <p class="text-sm text-green-400 mb-1" id="newestYear">Année: --</p>
+                            <p class="text-xs text-gray-500" id="newestStudio">Studio: --</p>
+                        </div>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: YEAR DISTRIBUTION -->
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-timeline text-purple-400"></i> Distribution par Décennie
+                    </h3>
+                    <div class="h-[300px]">
+                        <canvas id="decadeChart"></canvas>
+                    </div>
+                </div>
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-orange-400"></i> Timeline Annuelle (10
+                        dernières
+                        années)
+                    </h3>
+                    <div class="h-[300px]">
+                        <canvas id="yearlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: TOP PERFORMERS -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-primary flex items-center gap-3">
+                <i class="fa-solid fa-trophy"></i> TOP PERFORMERS
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Top Downloads -->
+                <div class="glass rounded-2xl p-6 lg:col-span-2">
+                    <div class="flex justify-between items-center mb-6">
+                        <h3 class="text-lg font-bold text-white flex items-center gap-2">
+                            <i class="fa-solid fa-fire text-orange-500"></i> Les "Hits" de la Communauté
+                        </h3>
+                        <span class="text-xs text-gray-500 font-mono">Volume de fichiers</span>
+                    </div>
+                    <div class="h-[300px]">
+                        <canvas id="topDownloadsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Summary KPI -->
+                <div class="grid grid-cols-1 gap-4">
+                    <div class="glass p-6 rounded-2xl border-l-4 border-primary">
+                        <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Titre le plus stocké
+                        </p>
+                        <h3 class="text-xl font-black text-white mt-1 truncate" id="topTitle">--</h3>
+                        <p class="text-sm text-primary mt-1" id="topTitleCount">0 fichiers</p>
+                    </div>
+                    <div class="glass p-6 rounded-2xl border-l-4 border-accent">
+                        <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Studio Dominant</p>
+                        <h3 class="text-xl font-black text-white mt-1" id="topStudio">--</h3>
+                        <p class="text-sm text-accent mt-1" id="topStudioCount">0 séries</p>
+                    </div>
+                    <div class="glass p-6 rounded-2xl border-l-4 border-secondary">
+                        <p class="text-xs text-gray-400 uppercase font-bold tracking-wider">Genre Favori</p>
+                        <h3 class="text-xl font-black text-white mt-1" id="topGenre">--</h3>
+                        <p class="text-sm text-secondary mt-1" id="topGenreCount">--</p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: TEMPORAL ANALYSIS -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-accent flex items-center gap-3">
+                <i class="fa-solid fa-chart-line"></i> ANALYSE TEMPORELLE
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Daily Activity -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-calendar-days text-green-400"></i> Activité Quotidienne (30
+                        derniers
+                        jours)
+                    </h3>
+                    <div class="h-[250px]">
+                        <canvas id="dailyActivityChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Hourly Heatmap -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-clock text-blue-400"></i> Distribution Horaire
+                    </h3>
+                    <div class="h-[250px]">
+                        <canvas id="hourlyChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: INDUSTRY ANALYSIS -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-primary flex items-center gap-3">
+                <i class="fa-solid fa-industry"></i> ANALYSE DE L'INDUSTRIE
+            </h2>
+            <div class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-4 gap-6">
+                <!-- Studio Volume -->
+                <div class="glass rounded-2xl p-6 lg:col-span-2">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-building text-blue-400"></i> Influence des Studios (Volume)
+                    </h3>
+                    <div class="h-[250px]">
+                        <canvas id="studioVolumeChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Demographics -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-users text-green-400"></i> Cible Démographique
+                    </h3>
+                    <div class="h-[200px] flex justify-center">
+                        <canvas id="demographicsChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Source Material -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-book-open text-yellow-500"></i> Origine de l'Oeuvre
+                    </h3>
+                    <div class="h-[200px] flex justify-center">
+                        <canvas id="sourceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: GENRE DEEP DIVE -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-secondary flex items-center gap-3">
+                <i class="fa-solid fa-masks-theater"></i> ANALYSE DES GENRES
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Genre Spectrum (Radar Chart) -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 text-center">Spectre des Genres
+                    </h3>
+                    <div class="h-[300px] flex justify-center">
+                        <canvas id="genrePolarChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Genre by Files -->
+                <div class="glass rounded-2xl p-6 lg:col-span-2">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4">Genres par Volume de Fichiers
+                    </h3>
+                    <div class="h-[300px]">
+                        <canvas id="genreFilesChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: QUALITY METRICS -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-yellow-500 flex items-center gap-3">
+                <i class="fa-solid fa-star"></i> MÉTRIQUES DE QUALITÉ
+            </h2>
+            <div class="grid grid-cols-1 lg:grid-cols-2 gap-6">
+                <!-- Score Distribution -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-star text-yellow-400"></i> Distribution des Notes
+                    </h3>
+                    <div class="h-[250px]">
+                        <canvas id="scoreDistChart"></canvas>
+                    </div>
+                </div>
+
+                <!-- Score vs Files Scatter -->
+                <div class="glass rounded-2xl p-6">
+                    <h3 class="text-sm font-bold uppercase text-gray-400 mb-4 flex items-center gap-2">
+                        <i class="fa-solid fa-chart-scatter text-purple-400"></i> Qualité vs Popularité
+                    </h3>
+                    <div class="h-[250px]">
+                        <canvas id="scatterChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <!-- SECTION: DETAILED TABLE -->
+            <h2 class="text-2xl font-black text-white pl-4 border-l-4 border-accent flex items-center gap-3">
+                <i class="fa-solid fa-table"></i> CLASSEMENT DÉTAILLÉ
+            </h2>
+            <div class="glass rounded-2xl p-0 overflow-hidden flex flex-col max-h-[500px]">
+                <div
+                    class="p-4 border-b border-gray-700/50 bg-surface/50 flex justify-between items-center sticky top-0 z-10 backdrop-blur">
+                    <h3 class="text-sm font-bold uppercase text-gray-300">
+                        <i class="fa-solid fa-list-ol mr-2"></i> Classement Complet
+                    </h3>
+                    <div class="flex gap-2 text-[10px]">
+                        <button onclick="renderTable('files')" id="btnFiles"
+                            class="px-3 py-1 bg-primary text-white rounded">Téléchargements</button>
+                        <button onclick="renderTable('score')" id="btnScore"
+                            class="px-3 py-1 bg-surface border border-gray-600 text-gray-300 rounded hover:bg-gray-700">Qualité</button>
+                    </div>
+                </div>
+                <div class="overflow-y-auto">
+                    <table class="w-full text-left text-sm text-gray-400">
+                        <thead class="bg-darker text-xs uppercase text-gray-500 sticky top-0 z-10">
+                            <tr>
+                                <th class="px-6 py-3">Rang</th>
+                                <th class="px-6 py-3">Titre</th>
+                                <th class="px-6 py-3">Année</th>
+                                <th class="px-6 py-3">Studio</th>
+                                <th class="px-6 py-3">Genre</th>
+                                <th class="px-6 py-3 text-right">Fichiers</th>
+                                <th class="px-6 py-3 text-right">Note</th>
+                            </tr>
+                        </thead>
+                        <tbody id="leaderboardBody" class="divide-y divide-gray-800/30">
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+
+        </div>
+    </main>
+
+    <!-- FOOTER WITH CREDITS -->
+    <footer class="text-center text-gray-500 text-xs py-8 border-t border-gray-800/50 mt-12 bg-darker/50">
+        <div class="space-y-2">
+            <p>
+                Powered by
+                <a href="https://jikan.moe" target="_blank" class="text-primary hover:text-white transition">Jikan
+                    API</a>
+                &
+                <a href="https://myanimelist.net" target="_blank"
+                    class="text-blue-400 hover:text-white transition">MyAnimeList</a>
+            </p>
+            <p class="font-mono">
+                Source Code available on
+                <a href="https://github.com/TMCooper/AnimeStatsAPI" target="_blank"
+                    class="text-white font-bold hover:text-accent transition">
+                    <i class="fa-brands fa-github"></i> GitHub
+                </a>
+            </p>
+            <p class="text-[10px] text-gray-600">AnimeStats API v1.0 • Designed for Community Archiving</p>
+        </div>
+    </footer>
+
+    <script>
+        const TOKEN = "{{ token }}";
+        let library = [];
+        let rawData = [];
+        let chartInstances = {};
+
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+
+        async function smartFetchMetadata(title, dbSeason) {
+            let cleanTitle = title
+                .replace(/\[.*?\]/g, '')
+                .replace(/\(.*?\)/g, '')
+                .replace(/saison?\s*\d+/gi, '')
+                .replace(/season\s*\d+/gi, '')
+                .replace(/s\d+/gi, '')
+                .replace(/\.(mkv|mp4|avi)/gi, '')
+                .replace(/_/g, ' ')
+                .trim();
+
+            const cacheKey = `trends_v9_${cleanTitle.toLowerCase()}_s${dbSeason}`;
+            const cached = localStorage.getItem(cacheKey);
+
+            if (cached) {
+                const el = document.getElementById('loadingCache');
+                if (el) el.innerText = parseInt(el.innerText || 0) + 1;
+                return JSON.parse(cached);
+            }
+
+            try {
+                await sleep(400 + Math.random() * 200);
+                const el = document.getElementById('loadingCalls');
+                if (el) el.innerText = parseInt(el.innerText || 0) + 1;
+
+                const res = await fetch(`https://api.jikan.moe/v4/anime?q=${encodeURIComponent(cleanTitle)}&limit=15`);
+
+                if (res.status === 429) {
+                    await sleep(3000);
+                    return smartFetchMetadata(title, dbSeason);
+                }
+
+                const json = await res.json();
+
+                if (json.data && json.data.length > 0) {
+                    let candidates = json.data.filter(x => x.type === 'TV');
+                    if (candidates.length === 0) candidates = json.data;
+
+                    candidates.sort((a, b) => {
+                        const yearA = a.year || (a.aired && a.aired.from ? new Date(a.aired.from).getFullYear() : 9999);
+                        const yearB = b.year || (b.aired && b.aired.from ? new Date(b.aired.from).getFullYear() : 9999);
+                        return yearA - yearB;
+                    });
+
+                    let bestMatch = null;
+
+                    if (dbSeason === 1) {
+                        bestMatch = candidates[0];
+                    } else {
+                        const targetIndex = dbSeason - 1;
+                        if (targetIndex < candidates.length) {
+                            bestMatch = candidates[targetIndex];
+                        } else {
+                            bestMatch = candidates[candidates.length - 1];
+                        }
+                    }
+
+                    if (!bestMatch) bestMatch = json.data[0];
+
+                    let demos = bestMatch.demographics.map(d => d.name);
+                    if (demos.length === 0) {
+                        const knownDemos = ['Shounen', 'Seinen', 'Shoujo', 'Josei', 'Kids'];
+                        bestMatch.genres.forEach(g => {
+                            if (knownDemos.includes(g.name)) demos.push(g.name);
+                        });
+                    }
+
+                    const meta = {
+                        title: bestMatch.title,
+                        title_en: bestMatch.title_english || bestMatch.title,
+                        image: bestMatch.images.webp.large_image_url || bestMatch.images.jpg.large_image_url,
+                        score: bestMatch.score,
+                        studios: bestMatch.studios.map(s => s.name),
+                        genres: bestMatch.genres.map(g => g.name),
+                        demographics: demos,
+                        source: bestMatch.source,
+                        year: bestMatch.year || (bestMatch.aired && bestMatch.aired.from ? new Date(bestMatch.aired.from).getFullYear() : null),
+                        db_season: dbSeason,
+                        episodes: bestMatch.episodes || 12,
+                        url: bestMatch.url,
+                        timestamp: Date.now()
+                    };
+                    localStorage.setItem(cacheKey, JSON.stringify(meta));
+                    return meta;
+                }
+            } catch (e) { console.warn(e); }
+
+            return { title_en: title, genres: [], studios: [], demographics: [], source: 'Unknown', score: 0, year: null, image: '', db_season: dbSeason, episodes: 12, url: '#' };
+        }
+
+        async function init() {
+            const pBar = document.getElementById('progressBar');
+            const lText = document.getElementById('loadingText');
+            const lPercent = document.getElementById('loadingPercent');
+            const lTitles = document.getElementById('loadingTitles');
+            const lETA = document.getElementById('loadingETA');
+            const startTime = Date.now();
+
+            try {
+                lText.innerText = 'Establishing secure connection...';
+                const res = await fetch(`/api/getStats`, { headers: { 'X-Admin-Token': TOKEN } });
+
+                if (!res.ok) throw new Error("API Fetch failed");
+
+                rawData = await res.json();
+
+                lText.innerText = 'Aggregating local database...';
+                const localMap = {};
+
+                rawData.forEach(row => {
+                    const title = row[1];
+                    const season = row[2] || 1;
+                    const ts = row[5];
+                    const uniqueKey = `${title}_S${season}`;
+
+                    if (!localMap[uniqueKey]) {
+                        localMap[uniqueKey] = {
+                            title: title,
+                            season: season,
+                            count: 0,
+                            first_ts: ts,
+                            dates: []
+                        };
+                    }
+                    localMap[uniqueKey].count++;
+                    localMap[uniqueKey].dates.push({ date: row[4], timestamp: ts });
+                    if (ts < localMap[uniqueKey].first_ts) localMap[uniqueKey].first_ts = ts;
+                });
+
+                const entries = Object.values(localMap);
+                library = [];
+                let processed = 0;
+
+                for (const entry of entries) {
+                    lText.innerText = `Neural processing: ${entry.title} (S${entry.season})...`;
+                    lTitles.innerText = processed + 1;
+                    const meta = await smartFetchMetadata(entry.title, entry.season);
+                    library.push({
+                        ...meta,
+                        local_files: entry.count,
+                        dates: entry.dates,
+                        first_seen: entry.first_ts
+                    });
+                    processed++;
+                    const percent = Math.round((processed / entries.length) * 100);
+                    pBar.style.width = `${percent}%`;
+                    lPercent.innerText = percent;
+
+                    const elapsed = Date.now() - startTime;
+                    const rate = processed / elapsed;
+                    const remaining = (entries.length - processed) / rate;
+                    lETA.innerText = `ETA: ${Math.round(remaining / 1000)}s`;
+                }
+
+                document.getElementById('loading').classList.add('hidden');
+                document.getElementById('dashboard').classList.remove('hidden');
+
+                document.getElementById('statusText').innerText = "ONLINE";
+                document.getElementById('dataPoints').innerText = library.length;
+                document.getElementById('uniqueTitles').innerText = library.length;
+                document.getElementById('totalFiles').innerText = library.reduce((acc, cur) => acc + cur.local_files, 0);
+
+                // --- FIX: TIME WASTED CALCULATION (RENAMED VARIABLES) ---
+                const totalMinutes = library.reduce((acc, item) => acc + ((item.episodes || 12) * 24), 0);
+                const wastedDays = Math.floor(totalMinutes / (24 * 60));
+                const remainingMinsTotal = totalMinutes % (24 * 60);
+                const wastedHours = Math.floor(remainingMinsTotal / 60);
+                const wastedMinutes = remainingMinsTotal % 60;
+
+                document.getElementById('timeWasted').innerText = `${wastedDays}j ${wastedHours}h ${wastedMinutes}m`;
+
+                const allStudios = new Set();
+                library.forEach(i => i.studios.forEach(s => allStudios.add(s)));
+
+                const validScores = library.filter(i => i.score);
+                const avgScore = validScores.length ? (validScores.reduce((sum, i) => sum + i.score, 0) / validScores.length).toFixed(1) : "N/A";
+                document.getElementById('avgScore').innerText = avgScore;
+
+                const allGenres = new Set();
+                library.forEach(i => i.genres.forEach(g => allGenres.add(g)));
+                document.getElementById('totalGenres').innerText = allGenres.size;
+
+                const allDates = new Set();
+                library.forEach(i => i.dates.forEach(d => allDates.add(d.date)));
+                const activeDaysEl = document.getElementById('activeDays');
+                if (activeDaysEl) activeDaysEl.innerText = allDates.size;
+
+                const timestamps = library.flatMap(i => i.dates.map(d => d.timestamp));
+                if (timestamps.length > 0) {
+                    const minTs = Math.min(...timestamps);
+                    const maxTs = Math.max(...timestamps);
+                    const ageSpan = Math.floor((maxTs - minTs) / 86400);
+                    const ageSpanEl = document.getElementById('ageSpan');
+                    if (ageSpanEl) ageSpanEl.innerText = `${ageSpan}j`;
+                }
+
+                const withYear = library.filter(i => i.year);
+                const oldest = [...withYear].sort((a, b) => (a.year || 9999) - (b.year || 9999))[0];
+                const newest = [...withYear].sort((a, b) => (b.year || 0) - (a.year || 0))[0];
+
+                if (oldest) {
+                    document.getElementById('oldestTitle').innerText = oldest.title_en;
+                    document.getElementById('oldestYear').innerText = `Année: ${oldest.year}`;
+                    document.getElementById('oldestStudio').innerText = `Studio: ${oldest.studios[0] || 'Unknown'}`;
+                    document.getElementById('oldestImage').src = oldest.image || '';
+                }
+
+                if (newest) {
+                    document.getElementById('newestTitle').innerText = newest.title_en;
+                    document.getElementById('newestYear').innerText = `Année: ${newest.year}`;
+                    document.getElementById('newestStudio').innerText = `Studio: ${newest.studios[0] || 'Unknown'}`;
+                    document.getElementById('newestImage').src = newest.image || '';
+                }
+
+                const topFileTitle = [...library].sort((a, b) => b.local_files - a.local_files)[0];
+                document.getElementById('topTitle').innerText = topFileTitle ? topFileTitle.title_en : '-';
+                document.getElementById('topTitleCount').innerText = topFileTitle ? `${topFileTitle.local_files} fichiers` : '';
+
+                const studioStats = {};
+                library.forEach(i => {
+                    i.studios.forEach(s => {
+                        if (!studioStats[s]) studioStats[s] = { count: 0, files: 0 };
+                        studioStats[s].count++;
+                        studioStats[s].files += i.local_files;
+                    });
+                });
+                const topStudio = Object.entries(studioStats).sort((a, b) => b[1].count - a[1].count)[0];
+                document.getElementById('topStudio').innerText = topStudio ? topStudio[0] : '-';
+                document.getElementById('topStudioCount').innerText = topStudio ? `${topStudio[1].count} séries` : '';
+
+                const genreStats = {};
+                library.forEach(i => {
+                    i.genres.forEach(g => {
+                        genreStats[g] = (genreStats[g] || 0) + 1;
+                    });
+                });
+                const topGenreEntry = Object.entries(genreStats).sort((a, b) => b[1] - a[1])[0];
+                document.getElementById('topGenre').innerText = topGenreEntry ? topGenreEntry[0] : '-';
+                document.getElementById('topGenreCount').innerText = topGenreEntry ? `${topGenreEntry[1]} titres` : '';
+
+                // CHARTS
+                const decades = {};
+                library.forEach(i => {
+                    if (i.year) {
+                        const decade = Math.floor(i.year / 10) * 10;
+                        decades[decade] = (decades[decade] || 0) + 1;
+                    }
+                });
+                new Chart(document.getElementById('decadeChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(decades).sort().map(d => `${d}s`),
+                        datasets: [{
+                            label: 'Titres',
+                            data: Object.keys(decades).sort().map(d => decades[d]),
+                            backgroundColor: '#8b5cf6',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                const years = {};
+                library.forEach(i => {
+                    if (i.year) years[i.year] = (years[i.year] || 0) + 1;
+                });
+                const sortedYears = Object.keys(years).sort().slice(-10);
+                new Chart(document.getElementById('yearlyChart'), {
+                    type: 'line',
+                    data: {
+                        labels: sortedYears,
+                        datasets: [{
+                            label: 'Titres',
+                            data: sortedYears.map(y => years[y]),
+                            borderColor: '#f59e0b',
+                            backgroundColor: 'rgba(245, 158, 11, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                const topDownloads = [...library].sort((a, b) => b.local_files - a.local_files).slice(0, 10);
+                new Chart(document.getElementById('topDownloadsChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: topDownloads.map(d => d.title_en.substring(0, 25) + (d.title_en.length > 25 ? '...' : '')),
+                        datasets: [{
+                            label: 'Fichiers',
+                            data: topDownloads.map(d => d.local_files),
+                            backgroundColor: '#8b5cf6',
+                            borderRadius: 6
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                const dailyMap = {};
+                library.forEach(i => {
+                    i.dates.forEach(d => {
+                        dailyMap[d.date] = (dailyMap[d.date] || 0) + 1;
+                    });
+                });
+                const sortedDates = Object.keys(dailyMap).sort().slice(-30);
+                new Chart(document.getElementById('dailyActivityChart'), {
+                    type: 'line',
+                    data: {
+                        labels: sortedDates,
+                        datasets: [{
+                            label: 'Fichiers ajoutés',
+                            data: sortedDates.map(d => dailyMap[d]),
+                            borderColor: '#10b981',
+                            backgroundColor: 'rgba(16, 185, 129, 0.1)',
+                            fill: true,
+                            tension: 0.4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                // --- FIX: CHART VARIABLES (RENAMED TO hoursLabels) ---
+                const hourlyMap = {};
+                library.forEach(i => {
+                    i.dates.forEach(d => {
+                        const h = new Date(d.timestamp * 1000).getHours();
+                        hourlyMap[h] = (hourlyMap[h] || 0) + 1;
+                    });
+                });
+                const hoursLabels = Array.from({ length: 24 }, (_, i) => i);
+                new Chart(document.getElementById('hourlyChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: hoursLabels.map(h => `${h}h`),
+                        datasets: [{
+                            label: 'Activité',
+                            data: hoursLabels.map(h => hourlyMap[h] || 0),
+                            backgroundColor: '#06b6d4',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                const topStudiosVol = Object.entries(studioStats).sort((a, b) => b[1].files - a[1].files).slice(0, 10);
+                new Chart(document.getElementById('studioVolumeChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: topStudiosVol.map(s => s[0]),
+                        datasets: [{
+                            label: 'Volume',
+                            data: topStudiosVol.map(s => s[1].files),
+                            backgroundColor: '#06b6d4',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: { color: '#1e293b' } }, y: { grid: { display: false } } }
+                    }
+                });
+
+                const demos = {};
+                library.forEach(i => {
+                    if (i.demographics && i.demographics.length > 0) {
+                        i.demographics.forEach(d => demos[d] = (demos[d] || 0) + 1);
+                    } else {
+                        demos['Inconnu'] = (demos['Inconnu'] || 0) + 1;
+                    }
+                });
+                new Chart(document.getElementById('demographicsChart'), {
+                    type: 'pie',
+                    data: {
+                        labels: Object.keys(demos),
+                        datasets: [{
+                            data: Object.values(demos),
+                            backgroundColor: ['#ef4444', '#3b82f6', '#ec4899', '#f59e0b', '#64748b'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } } }
+                });
+
+                const sources = {};
+                library.forEach(i => sources[i.source || 'Unknown'] = (sources[i.source || 'Unknown'] || 0) + 1);
+                let cleanSources = { 'Manga': 0, 'Original': 0, 'Light Novel': 0, 'Autre': 0 };
+                Object.entries(sources).forEach(([k, v]) => {
+                    if (cleanSources[k] !== undefined) cleanSources[k] += v;
+                    else cleanSources['Autre'] += v;
+                });
+                new Chart(document.getElementById('sourceChart'), {
+                    type: 'doughnut',
+                    data: {
+                        labels: Object.keys(cleanSources),
+                        datasets: [{
+                            data: Object.values(cleanSources),
+                            backgroundColor: ['#f59e0b', '#10b981', '#6366f1', '#475569'],
+                            borderWidth: 0
+                        }]
+                    },
+                    options: { maintainAspectRatio: false, plugins: { legend: { position: 'right', labels: { boxWidth: 10 } } } }
+                });
+
+                const topGenres = Object.entries(genreStats).sort((a, b) => b[1] - a[1]).slice(0, 7);
+                new Chart(document.getElementById('genrePolarChart'), {
+                    type: 'radar',
+                    data: {
+                        labels: topGenres.map(g => g[0]),
+                        datasets: [{
+                            label: 'Densité',
+                            data: topGenres.map(g => g[1]),
+                            backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                            borderColor: '#8b5cf6',
+                            pointBackgroundColor: '#fff',
+                            pointBorderColor: '#8b5cf6',
+                            borderWidth: 2,
+                            fill: true
+                        }]
+                    },
+                    options: {
+                        maintainAspectRatio: false,
+                        scales: {
+                            r: {
+                                grid: { color: 'rgba(255,255,255,0.1)' },
+                                angleLines: { color: 'rgba(255,255,255,0.1)' },
+                                ticks: { display: false, backdropColor: 'transparent' },
+                                pointLabels: { color: '#e2e8f0', font: { size: 12, family: "'Inter', sans-serif" } }
+                            }
+                        },
+                        plugins: { legend: { display: false } }
+                    }
+                });
+
+                const genreFiles = {};
+                library.forEach(i => {
+                    i.genres.forEach(g => {
+                        genreFiles[g] = (genreFiles[g] || 0) + i.local_files;
+                    });
+                });
+                const topGenreFiles = Object.entries(genreFiles).sort((a, b) => b[1] - a[1]).slice(0, 10);
+                new Chart(document.getElementById('genreFilesChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: topGenreFiles.map(g => g[0]),
+                        datasets: [{
+                            label: 'Fichiers',
+                            data: topGenreFiles.map(g => g[1]),
+                            backgroundColor: '#ec4899',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        indexAxis: 'y',
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { x: { grid: { color: '#1e293b' } }, y: { grid: { display: false } } }
+                    }
+                });
+
+                const scoreRanges = { '0-4': 0, '4-5': 0, '5-6': 0, '6-7': 0, '7-8': 0, '8-9': 0, '9-10': 0 };
+                library.forEach(i => {
+                    const s = i.score || 0;
+                    if (s < 4) scoreRanges['0-4']++;
+                    else if (s < 5) scoreRanges['4-5']++;
+                    else if (s < 6) scoreRanges['5-6']++;
+                    else if (s < 7) scoreRanges['6-7']++;
+                    else if (s < 8) scoreRanges['7-8']++;
+                    else if (s < 9) scoreRanges['8-9']++;
+                    else scoreRanges['9-10']++;
+                });
+                new Chart(document.getElementById('scoreDistChart'), {
+                    type: 'bar',
+                    data: {
+                        labels: Object.keys(scoreRanges),
+                        datasets: [{
+                            label: 'Titres',
+                            data: Object.values(scoreRanges),
+                            backgroundColor: '#fbbf24',
+                            borderRadius: 4
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: { y: { beginAtZero: true, grid: { color: '#1e293b' } }, x: { grid: { display: false } } }
+                    }
+                });
+
+                new Chart(document.getElementById('scatterChart'), {
+                    type: 'scatter',
+                    data: {
+                        datasets: [{
+                            label: 'Titres',
+                            data: library.map(i => ({ x: i.local_files, y: i.score || 0 })),
+                            backgroundColor: 'rgba(139, 92, 246, 0.6)',
+                            borderColor: '#8b5cf6',
+                            borderWidth: 1
+                        }]
+                    },
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        plugins: { legend: { display: false } },
+                        scales: {
+                            x: { title: { display: true, text: 'Fichiers' }, grid: { color: '#1e293b' } },
+                            y: { title: { display: true, text: 'Note' }, grid: { color: '#1e293b' } }
+                        }
+                    }
+                });
+
+                renderTable('files');
+            } catch (e) {
+                console.error('Error initializing dashboard:', e);
+                document.getElementById('loadingText').innerHTML = '<span class="text-red-500">System Error. Check console.</span>';
+                document.getElementById('progressBar').classList.add('bg-red-500');
+            }
+        }
+
+        function renderTable(sortMode) {
+            const tbody = document.getElementById('leaderboardBody');
+            tbody.innerHTML = '';
+
+            document.getElementById('btnFiles').className = sortMode === 'files' ? 'px-3 py-1 bg-primary text-white rounded' : 'px-3 py-1 bg-surface border border-gray-600 text-gray-300 rounded hover:bg-gray-700';
+            document.getElementById('btnScore').className = sortMode === 'score' ? 'px-3 py-1 bg-primary text-white rounded' : 'px-3 py-1 bg-surface border border-gray-600 text-gray-300 rounded hover:bg-gray-700';
+
+            let sorted = [...library];
+            if (sortMode === 'files') sorted.sort((a, b) => b.local_files - a.local_files);
+            if (sortMode === 'score') sorted.sort((a, b) => (b.score || 0) - (a.score || 0));
+
+            sorted.forEach((item, idx) => {
+                let rankStyle = "text-gray-500";
+                if (idx === 0) rankStyle = "text-yellow-400 font-bold";
+                if (idx === 1) rankStyle = "text-gray-300 font-bold";
+                if (idx === 2) rankStyle = "text-orange-400 font-bold";
+
+                const tr = document.createElement('tr');
+                tr.className = "hover:bg-white/5 transition border-b border-gray-800/50";
+                tr.innerHTML = `
+                    <td class="px-6 py-4 ${rankStyle}">#${idx + 1}</td>
+                    <td class="px-6 py-4 flex items-center gap-3">
+                        <div class="w-10 h-10 rounded bg-gray-800 flex-shrink-0 overflow-hidden">
+                            <img src="${item.image}" class="w-full h-full object-cover" onerror="this.src='data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2240%22 height=%2240%22%3E%3Crect fill=%22%231e293b%22 width=%2240%22 height=%2240%22/%3E%3C/svg%3E'">
+                        </div>
+                        <a href="${item.url}" target="_blank" class="text-white font-medium truncate max-w-[250px] hover:text-primary transition hover:underline">${item.title_en} <i class="fa-solid fa-arrow-up-right-from-square text-[10px] ml-1 opacity-50"></i></a>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-gray-400">${item.year || '-'}</td>
+                    <td class="px-6 py-4 text-xs text-accent">${item.studios[0] || '-'}</td>
+                    <td class="px-6 py-4 text-xs text-gray-400">${item.genres.slice(0, 2).join(', ') || '-'}</td>
+                    <td class="px-6 py-4 text-right font-mono text-gray-300">${item.local_files}</td>
+                    <td class="px-6 py-4 text-right font-bold text-yellow-500">${item.score || '-'}</td>
+                `;
+                tbody.appendChild(tr);
+            });
+        }
+
+        function hardReset() {
+            if (confirm("⚠️ Effacer tout le cache local et recharger ?")) {
+                localStorage.clear();
+                location.reload();
+            }
+        }
+
+        init();
+    </script>
+</body>
+
+</html>
