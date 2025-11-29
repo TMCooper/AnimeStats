@@ -555,6 +555,11 @@
                 info.isMovie = true;
                 return info;
             }
+            if (str === "film" || str === "movie") {
+                info.isMovie = true;
+                info.num = 1;
+                return info;
+            }
 
             if (str.includes("remake")) {
                 info.isRemake = true;
@@ -607,6 +612,20 @@
             const meta2 = await fetchAndPickBest(meta1?.title_en || cleanTitle, dbInfo, true);
 
             const finalMeta = meta2 || meta1;
+            if (!meta1 || (!meta1.year && !meta1.studios?.length)) {
+
+                // dictionnaire FR → EN
+                const TITLE_FR_EN = {
+                    "dahliya artisane magicienne": "Dahliya in Bloom",
+                };
+
+                const alt = TITLE_FR_EN[cleanTitle];
+                if (alt) {
+                    const meta2 = await fetchAndPickBest(alt, dbInfo, true);
+                    if (meta2) return meta2;
+                }
+            }
+            
             localStorage.setItem(cacheKey, JSON.stringify(finalMeta));
             return finalMeta;
         }
