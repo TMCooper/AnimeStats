@@ -1,4 +1,4 @@
-from flask import Flask, jsonify, request
+from flask import Flask, jsonify, request, render_template
 from src.backend import *
 
 class Yui:
@@ -25,6 +25,16 @@ class Yui:
     
     @app.route("/api/getStats", methods=["GET"])
     def getStats():
-        p = request.args.get("p", "").strip()
+        p = request.headers.get("X-Admin-Token", "").strip()
+        if p == "":
+            p = request.args.get("p", "").strip()
+            
+        elif p != ADMIN_PASSWORD:
+            return jsonify({"status": "Unauthorized", "saved": False})
+        
         rows = Cardinal.getStats(p)
         return jsonify(rows)
+
+    @app.route("/api/renderStats", methods=["GET"])
+    def renderStats():
+        return render_template("index.html", token=ADMIN_PASSWORD)
