@@ -621,7 +621,7 @@
                 return fallback;
             }
         }
-        
+
         async function fetchAndPickBest(query, dbInfo, strict = false) {
             let retries = 3; // Nombre de tentatives en cas d'erreur 429
             
@@ -982,12 +982,54 @@
 
             // Genre Radar
             const genreStats = {};
-            library.forEach(i => i.genres.forEach(g => genreStats[g] = (genreStats[g] || 0) + 1));
-            const topGenres = Object.entries(genreStats).sort((a, b) => b[1] - a[1]).slice(0, 7);
+            library.forEach(i => {
+                // On s'assure que i.genres existe (même pour les fallbacks)
+                if (i.genres && i.genres.length) {
+                    i.genres.forEach(g => genreStats[g] = (genreStats[g] || 0) + 1);
+                }
+            });
+
+            // On prend les 6 meilleurs, ou moins si pas assez
+            let topGenres = Object.entries(genreStats)
+                .sort((a, b) => b[1] - a[1])
+                .slice(0, 6);
+
+            // SÉCURITÉ : Le radar a besoin de 3 points min pour faire une forme.
+            // Si on a moins de 3 genres, on ajoute des axes "vides" pour éviter la ligne moche.
+            while (topGenres.length < 3) {
+                topGenres.push(["", 0]); 
+            }
+
             new Chart(document.getElementById('genrePolarChart'), {
                 type: 'radar',
-                data: { labels: topGenres.map(g => g[0]), datasets: [{ label: 'Densité', data: topGenres.map(g => g[1]), backgroundColor: 'rgba(139, 92, 246, 0.2)', borderColor: '#8b5cf6', pointBackgroundColor: '#fff', pointBorderColor: '#8b5cf6', borderWidth: 2, fill: true }] },
-                options: { maintainAspectRatio: false, scales: { r: { grid: { color: 'rgba(255,255,255,0.1)' }, angleLines: { color: 'rgba(255,255,255,0.1)' }, ticks: { display: false, backdropColor: 'transparent' }, pointLabels: { color: '#e2e8f0', font: { size: 12 } } } }, plugins: { legend: { display: false } } }
+                data: {
+                    labels: topGenres.map(g => g[0]),
+                    datasets: [{
+                        label: 'Densité',
+                        data: topGenres.map(g => g[1]),
+                        backgroundColor: 'rgba(139, 92, 246, 0.2)',
+                        borderColor: '#8b5cf6',
+                        pointBackgroundColor: '#fff',
+                        pointBorderColor: '#8b5cf6',
+                        borderWidth: 2,
+                        fill: true
+                    }]
+                },
+                options: {
+                    maintainAspectRatio: false,
+                    scales: {
+                        r: {
+                            // FORCER LE ZÉRO : Empêche le graphique de "zoomer" sur une seule valeur
+                            beginAtZero: true, 
+                            suggestedMin: 0,
+                            grid: { color: 'rgba(255,255,255,0.1)' },
+                            angleLines: { color: 'rgba(255,255,255,0.1)' },
+                            ticks: { display: false, backdropColor: 'transparent' },
+                            pointLabels: { color: '#e2e8f0', font: { size: 11 } }
+                        }
+                    },
+                    plugins: { legend: { display: false } }
+                }
             });
 
             // Genre Files
